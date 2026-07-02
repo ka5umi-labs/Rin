@@ -1,0 +1,54 @@
+name: Sync upstream Rin
+
+on:
+  workflow_dispatch:
+  schedule:
+    - cron: "17 */6 * * *"
+
+concurrency:
+  group: sync-upstream-rin
+  cancel-in-progress: false
+
+jobs:
+  sync:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout fork
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          token: ${{ secrets.SYNC_PAT }}
+
+      - name: Configure git user
+        run: |
+          git config user.name "Sunyi Sync Bot"
+          git config user.email "actions@github.com"
+
+      - name: Add upstream remote
+        run: |
+          git remote add upstream https://github.com/openRin/Rin.git
+          git fetch upstream main
+
+      - name: Check whether upstream has new commits
+        id: check
+        run: |
+          git checkout main
+
+          if git merge-base --is-ancestor upstream/main HEAD; then
+            echo "Your fork already contains upstream/main."
+            echo "has_update=false" >> "$GITHUB_OUTPUT"
+          else
+            echo "Upstream has new commits."
+            echo "has_update=true" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Merge upstream/main
+        if: steps.check.outputs.has_update == 'true'
+        run: |
+          git merge --no-edit upstream/main
+
+      - name: Push updated main
+        if: steps.check.outputs.has_update == 'true'
+        run: |
+          git push origin HEAD:main
